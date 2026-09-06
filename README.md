@@ -1,75 +1,159 @@
-# AssetTrack - Sistem Manajemen Aset & Inventaris
+# LAPORAN PROYEK UJIAN AKHIR SEMESTER (UAS)
+## SISTEM MANAJEMEN ASET DAN INVENTARIS KANTOR (ASSETTRACK)
 
-Sistem manajemen siklus hidup aset dan inventaris berbasis web yang dibangun dengan Laravel dan TailwindCSS. Dilengkapi dengan kode QR otomatis, pelacakan sirkulasi peminjaman dengan audit trail, kontrol otorisasi multi-admin, dan retensi data laporan keuangan akhir tahun menggunakan Soft Deletes.
-
----
-
-## 🌟 Fitur Utama
-
-- **Otomatisasi QR Code & UUID**: Setiap aset baru otomatis diberikan UUID v4 unik dan QR code yang dapat dicetak langsung dalam format stiker label inventaris.
-- **Pemeriksaan & Peminjaman Mobile First**: Halaman scan responsif (`/scan/{uuid}`) dan pemindai kamera (`/scan/camera`) yang memungkinkan staf memverifikasi status serta memproses peminjaman secara langsung.
-- **State Machine Peminjaman**: Pengaturan status aset yang ketat (`Tersedia`, `Dipinjam`, `Rusak`) dengan pencatatan log sirkulasi lengkap.
-- **Multi-Admin & Alur Persetujuan Registrasi**: Registrasi admin baru membutuhkan persetujuan Super Admin (`Pending Approval`). Semua transaksi peminjaman dan pengembalian dicatat dengan identitas admin penyetuju/penerima.
-- **Integritas Laporan Keuangan (Soft Deletes)**: Aset yang ditandai rusak atau dibuang diarsipkan menggunakan Eloquent `SoftDeletes` (`deleted_at`), sehingga nilai kapitalisasi dan depresiasi tetap tercatat akurat dalam audit laporan akhir tahun (`/reports`).
+**Informasi Mahasiswa:**
+* **Nama:** Yukie Fahzal Adi Kurnia
+* **NIM:** 223111021
+* **Program Studi:** Informatika
+* **Institusi:** Universitas Informatika dan Bisnis Indonesia (UNIBI)
+* **Mata Kuliah:** Pemrograman Framework
 
 ---
 
-## 🚀 Panduan Instalasi & Menjalankan Aplikasi
+## 1. Pendahuluan dan Latar Belakang
 
-### 1. Kebutuhan Sistem
-- PHP >= 8.2 (dengan ekstensi `pdo_sqlite` atau database pilihan)
-- Composer
-- Node.js & NPM
+AssetTrack adalah sistem manajemen aset dan inventaris kantor berbasis web monolithic yang dirancang untuk mengelola seluruh siklus hidup barang secara terstruktur. Berbeda dengan pencatatan inventaris tradisional yang hanya berfokus pada jumlah stok, AssetTrack mencatat rantai kepemilikan (*chain of custody*), riwayat sirkulasi peminjaman, serta status kondisi aset secara real-time.
 
-### 2. Langkah Instalasi
+Sistem ini mengintegrasikan teknologi identifikasi QR Code berbasis UUID v4, otorisasi multi-admin dengan mekanisme persetujuan (*approval flow*), serta mekanisme *Soft Deletes* untuk menjamin integritas data laporan keuangan dan penyusutan aset pada akhir tahun.
+
+---
+
+## 2. Arsitektur Sistem dan Spesifikasi Teknologi
+
+AssetTrack dibangun menggunakan arsitektur aplikasi monolitik (*monolithic architecture*), di mana logika antarmuka (*frontend*) dan logika bisnis (*backend*) dikelola dalam satu basis kode menggunakan kerangka kerja Laravel dan Blade.
+
+### Tabel Spesifikasi Teknologi
+
+| Komponen | Teknologi / Pustaka | Peran dan Tanggung Jawab |
+| :--- | :--- | :--- |
+| **Core Framework** | Laravel (PHP 8.2+) | Mengelola logika bisnis, autentikasi, otorisasi, state machine peminjaman, Eloquent Soft Deletes, dan penanganan event observer. |
+| **Frontend & UI** | TailwindCSS + Blade | Menyediakan antarmuka korporat minimalis, komponen responsif untuk perangkat seluler, serta antarmuka pemindai QR Code. |
+| **Database Engine** | MySQL / PostgreSQL / SQLite | Menyimpan data master aset, log audit transaksi sirkulasi (`asset_logs`), data pengguna, serta kolom `deleted_at`. |
+| **QR Code Engine** | `simplesoftwareio/simple-qrcode` | Menghasilkan gambar QR Code berbasis URL unik/UUID v4 secara otomatis saat registrasi aset. |
+
+---
+
+## 3. Fitur Utama dan Logika Bisnis
+
+### 3.1. Otomatisasi UUID dan Generasi QR Code
+Setiap pendaftaran aset baru memicu Laravel Event Observer untuk menghasilkan UUID v4 unik. URL identifikasi (`/scan/{uuid}`) dikonversi secara otomatis menjadi grafis QR Code yang siap dicetak sebagai stiker label aset.
+
+### 3.2. Pemindaian Mobile First dan Antarmuka Kamera
+Aplikasi menyediakan halaman pemindai kamera interaktif (`/scan/camera`) dan tampilan detail responsif (`/scan/{uuid}`) untuk perangkat seluler, mempermudah staf memeriksa profil aset dan riwayat peminjaman langsung di lapangan.
+
+### 3.3. State Machine Peminjaman Aset
+Sistem menerapkan aturan transisi status barang yang ketat untuk menjaga konsistensi data:
+* **Tersedia -> Dipinjam**: Aset dapat dipinjam oleh staf melalui persetujuan admin.
+* **Dipinjam -> Tersedia**: Aset dikembalikan dan dicatat dalam log sirkulasi.
+* **Tersedia / Dipinjam -> Rusak**: Aset yang ditandai rusak tidak dapat dipinjam kembali.
+
+### 3.4. Multi-Admin dan Alur Persetujuan Registrasi
+Pendaftaran akun admin baru memerlukan persetujuan dari Super Admin (`Pending Approval`). Setiap transaksi peminjaman dan pengembalian barang secara otomatis mencatat identitas admin yang memproses transaksi tersebut.
+
+### 3.5. Integritas Laporan Keuangan (Soft Deletes)
+Aset yang rusak, hilang, atau dibuang tidak dihapus secara permanen dari basis data (`HARD DELETE`). Menggunakan trait `Illuminate\Database\Eloquent\SoftDeletes`, kolom `deleted_at` diisi sehingga data tetap tersimpan. Laporan keuangan akhir tahun (`/reports`) menggunakan kueri `Asset::withTrashed()->get()` agar kalkulasi nilai kapitalisasi awal dan penyusutan aset tetap akurat untuk kebutuhan audit.
+
+---
+
+## 4. Skema Basis Data
+
+### 4.1. Tabel `users`
+* `id`: Primary Key (`bigint`)
+* `name`: Nama pengguna (`string`)
+* `email` / `username`: Identitas login (`string`, unique)
+* `password`: Kata sandi terenkripsi (`string`)
+* `role`: Peran akun (`enum('super_admin', 'admin')`)
+* `status`: Status persetujuan akun (`enum('approved', 'pending')`)
+* `created_at` / `updated_at`: Stempel waktu
+
+### 4.2. Tabel `assets`
+* `id`: Primary Key (`bigint`)
+* `uuid`: UUID v4 unik (`uuid`, indexed)
+* `name`: Nama barang/aset (`string`)
+* `category`: Kategori aset (`string`)
+* `purchase_price`: Harga perolehan (`decimal(15,2)`)
+* `status`: Status ketersediaan (`enum('Tersedia', 'Dipinjam', 'Rusak')`)
+* `created_at` / `updated_at`: Stempel waktu
+* `deleted_at`: Stempel waktu Soft Delete (nullable)
+
+### 4.3. Tabel `asset_logs`
+* `id`: Primary Key (`bigint`)
+* `asset_id`: Foreign Key ke `assets.id`
+* `user_id`: Foreign Key ke `users.id` (peminjam/admin)
+* `admin_id`: Foreign Key ke `users.id` (admin penyetuju)
+* `action`: Jenis transaksi (`enum('REGISTERED', 'BORROWED', 'RETURNED', 'MARKED_BROKEN')`)
+* `notes`: Catatan tambahan (`text`, nullable)
+* `created_at`: Stempel waktu transaksi
+
+---
+
+## 5. Panduan Instalasi dan Pengoperasian
+
+### 6.1. Persyaratan Sistem
+* PHP >= 8.2 (dengan ekstensi `pdo_sqlite` atau PDO MySQL/PostgreSQL)
+* Composer >= 2.x
+* Node.js >= 18.x & NPM
+
+### 5.2. Langkah-Langkah Instalasi
+
+1. **Clone Repository dan Masuk Direktori Proyek:**
 ```bash
-# Clone repository & masuk ke direktori proyek
 git clone <repository_url>
 cd UAS
+```
 
-# Install dependensi backend & frontend
+2. **Install Dependensi Backend dan Frontend:**
+```bash
 composer install
 npm install
+```
 
-# Konfigurasi file environment
+3. **Konfigurasi File Environment:**
+```bash
 cp .env.example .env
 php artisan key:generate
+```
 
-# Jalankan migrasi dan seeder database awal
+4. **Menjalankan Migrasi dan Seeder Database:**
+```bash
 php artisan migrate:fresh --seed
+```
 
-# Build asset frontend
+5. **Kompilasi Aset Frontend:**
+```bash
 npm run build
 ```
 
-### 3. Menjalankan Server
+6. **Menjalankan Server Lokal:**
 ```bash
-# Jalankan web server Laravel
 php artisan serve
 ```
-Akses aplikasi melalui peramban web di: `http://127.0.0.1:8000`
+Akses aplikasi melalui peramban web di alamat: `http://127.0.0.1:8000`
 
 ---
 
-## 🔐 Akun Akses Awal (Super Admin)
+## 6. Kredensial Akses Awal (Super Admin)
 
-Setelah menjalankan `php artisan migrate:fresh --seed`, akun Super Admin bawaan adalah:
-- **Username / Login:** `sadmin` (atau `sadmin@assettrack.com`)
-- **Password:** `yukisadmin`
+Setelah menjalankan perintah `php artisan migrate:fresh --seed`, akun Super Admin bawaan yang terdaftar pada sistem adalah:
+
+* **Username:** `sadmin` (atau `sadmin@assettrack.com`)
+* **Password:** `yukisadmin`
+* **Peran:** Super Admin (Akses penuh untuk verifikasi pendaftaran admin baru)
 
 ---
 
-## 🧪 Menjalankan Pengujian Otomatis (Feature Tests)
+## 7. Pengujian Otomatis Sistem (Feature Tests)
 
-Semua skenario pengujian bisnis (autentikasi, registrasi admin, CRUD aset, peminjaman, pengembalian, soft delete, dan audit laporan) dapat diuji dengan perintah:
+Seluruh pengujian skenario logika bisnis (autentikasi, otorisasi persetujuan admin, pengelolaan data aset, sirkulasi peminjaman, pengembalian, penerapan soft delete, serta audit laporan keuangan) dilakukan menggunakan kerangka kerja pengujian bawaan Laravel.
+
+Perintah untuk menjalankan suite pengujian:
 ```bash
 php artisan test
 ```
 
 ---
 
-## 📄 Informasi Pembuat
+## 8. Penutup
 
-Tugas UAS Pemrograman Framework  
-**Yukie Fahzal Adi Kurnia** (NIM: 223111021)  
-Program Studi Informatika &bull; Universitas Informatika dan Bisnis Indonesia (UNIBI)
+Sistem AssetTrack berhasil diimplementasikan sesuai dengan seluruh persyaratan fungsional dan non-fungsional yang ditetapkan. Kombinasi kerangka kerja Laravel dan TailwindCSS menghasilkan aplikasi monolitik yang responsif, aman, dan dapat diandalkan untuk pengelolaan sirkulasi inventaris kantor serta transparansi laporan audit keuangan.
+Sistem AssetTrack berhasil diimplementasikan sesuai dengan seluruh persyaratan fungsional dan non-fungsional yang ditetapkan. Kombinasi kerangka kerja Laravel dan TailwindCSS menghasilkan aplikasi monolitik yang responsif, aman, dan dapat diandalkan untuk pengelolaan sirkulasi inventaris kantor serta transparansi laporan audit keuangan.
